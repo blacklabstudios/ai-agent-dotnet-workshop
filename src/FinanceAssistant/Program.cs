@@ -1,5 +1,8 @@
+using FinanceAssistant;
 using FinanceAssistant.Data;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 
 
 var config = new ConfigurationBuilder()
@@ -17,6 +20,15 @@ await using (var db = new FinanceDbContext())
     await db.Database.EnsureCreatedAsync();
 }
 
+var services = new ServiceCollection();
+services.AddChatClient(config);
+var provider = services.BuildServiceProvider();
+
+var chatClient = provider.GetRequiredService<IChatClient>();
+
+var systemPrompt = await File.ReadAllTextAsync(
+    Path.Combine(AppContext.BaseDirectory, "Prompts", "SystemPrompt.md"));
+
 Console.WriteLine("Finance assistant. Type a message, or 'exit' to quit.");
 
 while (true)
@@ -28,7 +40,14 @@ while (true)
         break;
     }
 
-    Console.WriteLine($"(echo) {input}");
+    var messages = new List<ChatMessage>
+    {
+        new(ChatRole.System, systemPrompt),
+        new(ChatRole.User, input)
+    };
+
+    var response = await chatClient.GetResponseAsync(messages);
+    Console.WriteLine(response.Text);
 }
 
 return 0;
