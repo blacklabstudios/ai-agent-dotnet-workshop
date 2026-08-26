@@ -29,7 +29,6 @@ public static class ServiceCollectionExtensions
                 .AsBuilder()
                 .ConfigureOptions(o =>
                     o.Reasoning = new ReasoningOptions { Effort = ReasoningEffort.None })
-                .UseFunctionInvocation()
                 .Build());
     }
 
