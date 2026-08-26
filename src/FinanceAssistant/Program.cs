@@ -66,6 +66,8 @@ var chatOptions = new ChatOptions
     ]
 };
 
+var chatAgent = new ChatAgent(chatClient, chatOptions);
+
 var systemPrompt = await File.ReadAllTextAsync(
     Path.Combine(AppContext.BaseDirectory, "Prompts", "SystemPrompt.md"));
 
@@ -86,8 +88,8 @@ while (true)
         new(ChatRole.User, input)
     };
 
-    var response = await chatClient.GetResponseAsync(messages, chatOptions);
-    Console.WriteLine(response.Text);
+    var reply = await chatAgent.RunTurnAsync(messages);
+    Console.WriteLine(reply);
 }
 
 return 0;
