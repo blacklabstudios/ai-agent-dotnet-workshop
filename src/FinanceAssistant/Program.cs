@@ -1,5 +1,6 @@
 using FinanceAssistant;
 using FinanceAssistant.Data;
+using FinanceAssistant.Tools;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,6 +22,12 @@ var provider = services.BuildServiceProvider();
 
 var chatClient = provider.GetRequiredService<IChatClient>();
 
+var convertCurrency = new ConvertCurrencyTool();
+var chatOptions = new ChatOptions
+{
+    Tools = [AIFunctionFactory.Create(convertCurrency.Convert)]
+};
+
 var systemPrompt = await File.ReadAllTextAsync(
     Path.Combine(AppContext.BaseDirectory, "Prompts", "SystemPrompt.md"));
 
@@ -41,7 +48,7 @@ while (true)
         new(ChatRole.User, input)
     };
 
-    var response = await chatClient.GetResponseAsync(messages);
+    var response = await chatClient.GetResponseAsync(messages, chatOptions);
     Console.WriteLine(response.Text);
 }
 
