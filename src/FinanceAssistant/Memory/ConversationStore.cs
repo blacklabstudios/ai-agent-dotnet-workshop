@@ -30,4 +30,36 @@ public class ConversationStore
     {
         _messages.Add(new ChatMessage(ChatRole.Tool, [content]));
     }
+
+    public void Compact(string summary, int keepTailCount)
+    {
+        if (_messages.Count == 0)
+        {
+            return;
+        }
+
+        var systemMessage = _messages[0];
+
+        var start = Math.Max(1, _messages.Count - keepTailCount);
+
+        // Never open the tail on a tool result. Its tool call sits earlier and is about to be
+        // summarised away, and providers reject a tool message with no tool call before it.
+        // Walk back until the tail starts on the call, so the pair travels together.
+        while (start > 1 && start < _messages.Count &&
+               _messages[start].Contents.Any(c => c is FunctionResultContent))
+        {
+            start--;
+        }
+
+        var tail = _messages.Skip(start).ToList();
+
+        var summaryMessage = new ChatMessage(
+            ChatRole.System,
+            $"Conversation summary so far: {summary}");
+
+        _messages.Clear();
+        _messages.Add(systemMessage);
+        _messages.Add(summaryMessage);
+        _messages.AddRange(tail);
+    }
 }

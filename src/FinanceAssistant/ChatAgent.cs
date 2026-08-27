@@ -9,13 +9,21 @@ public class ChatAgent
     private readonly ChatOptions _options;
     private readonly ConversationStore _store;
     private readonly int _maxIterations;
+    private readonly SummarizingHistoryReducer? _reducer;
 
-    public ChatAgent(IChatClient chatClient, ChatOptions options, ConversationStore store, string systemPrompt, int maxIterations = 8)
+    public ChatAgent(
+        IChatClient chatClient,
+        ChatOptions options,
+        ConversationStore store,
+        string systemPrompt,
+        SummarizingHistoryReducer? reducer = null,
+        int maxIterations = 8)
     {
         _chatClient = chatClient;
         _options = options;
         _store = store;
         _maxIterations = maxIterations;
+        _reducer = reducer;
 
         _store.AppendSystemMessage(systemPrompt);
     }
@@ -23,6 +31,11 @@ public class ChatAgent
     public async Task<string> RunTurnAsync(string input, CancellationToken ct = default)
     {
         _store.AppendUserMessage(input);
+
+        if (_reducer is not null)
+        {
+            await _reducer.TryReduceAsync(_store, ct);
+        }
 
         for (var iteration = 1; iteration <= _maxIterations; iteration++)
         {
