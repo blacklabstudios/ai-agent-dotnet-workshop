@@ -1,5 +1,6 @@
 using FinanceAssistant;
 using FinanceAssistant.Data;
+using FinanceAssistant.Memory;
 using FinanceAssistant.Tools;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
@@ -61,10 +62,11 @@ var chatOptions = new ChatOptions
     ]
 };
 
-var chatAgent = new ChatAgent(chatClient, chatOptions);
-
 var systemPrompt = await File.ReadAllTextAsync(
     Path.Combine(AppContext.BaseDirectory, "Prompts", "SystemPrompt.md"));
+
+var store = new ConversationStore();
+var chatAgent = new ChatAgent(chatClient, chatOptions, store, systemPrompt);
 
 Console.WriteLine("Finance assistant. Type a message, or 'exit' to quit.");
 
@@ -77,13 +79,9 @@ while (true)
         break;
     }
 
-    var messages = new List<ChatMessage>
-    {
-        new(ChatRole.System, systemPrompt),
-        new(ChatRole.User, input)
-    };
+    Console.WriteLine($"[memory] {store.Messages.Count} messages in history");
 
-    var reply = await chatAgent.RunTurnAsync(messages);
+    var reply = await chatAgent.RunTurnAsync(input);
     Console.WriteLine(reply);
 }
 
