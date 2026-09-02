@@ -68,24 +68,37 @@ public class ChatAgent
                     .OfType<AIFunction>()
                     .FirstOrDefault(f => f.Name == call.Name);
 
-                AIContent resultContent;
                 if (function is null)
                 {
-                    resultContent = new FunctionResultContent(call.CallId, $"Tool '{call.Name}' is not registered.");
+                    _store.AppendToolResult(new FunctionResultContent(
+                        call.CallId,
+                        $"Tool '{call.Name}' is not registered."));
+                    continue;
                 }
-                else
+
+                if (function is ApprovalRequiredAIFunction && !ConfirmInteractive(call))
                 {
-                    try
-                    {
-                        var result = await function.InvokeAsync(new AIFunctionArguments(call.Arguments), ct);
-                        resultContent = new FunctionResultContent(call.CallId, result);
-                    }
-                    catch (Exception ex)
-                    {
-                        // Tool threw something the model didn't handle (or we didn't wrap at the tool boundary).
-                        // Hand the model a structured error so it can recover or apologise.
-                        resultContent = new FunctionResultContent(call.CallId, $"Tool error: {ex.Message}");
-                    }
+                    _store.AppendToolResult(new FunctionResultContent(
+                        call.CallId,
+                        new
+                        {
+                            error = "user_declined",
+                            message = "The user did not confirm the action. Do not retry without explicit user permission."
+                        }));
+                    continue;
+                }
+
+                AIContent resultContent;
+                try
+                {
+                    var result = await function.InvokeAsync(new AIFunctionArguments(call.Arguments), ct);
+                    resultContent = new FunctionResultContent(call.CallId, result);
+                }
+                catch (Exception ex)
+                {
+                    // Tool threw something the model didn't handle (or we didn't wrap at the tool boundary).
+                    // Hand the model a structured error so it can recover or apologise.
+                    resultContent = new FunctionResultContent(call.CallId, $"Tool error: {ex.Message}");
                 }
 
                 _store.AppendToolResult(resultContent);
@@ -100,5 +113,18 @@ public class ChatAgent
             .Select(m => m.Text)
             .LastOrDefault(t => !string.IsNullOrWhiteSpace(t));
         return lastAssistantText ?? "(no final answer, iteration cap reached)";
+    }
+
+    private static bool ConfirmInteractive(FunctionCallContent call)
+    {
+        var argsPretty = call.Arguments is { Count: > 0 }
+            ? string.Join(", ", call.Arguments.Select(kv => $"{kv.Key}={kv.Value}"))
+            : "(no arguments)";
+
+        Console.WriteLine($"[agent] '{call.Name}' requires confirmation.");
+        Console.WriteLine($"        Arguments: {argsPretty}");
+        Console.Write("        Type 'yes' to proceed: ");
+        var answer = Console.ReadLine()?.Trim();
+        return string.Equals(answer, "yes", StringComparison.OrdinalIgnoreCase);
     }
 }
