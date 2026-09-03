@@ -6,6 +6,15 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <RootNamespace>FinanceAssistant.McpServer</RootNamespace>
+    <UserSecretsId>finance-assistant-workshop</UserSecretsId>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.2.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FinanceAssistant\FinanceAssistant.csproj" />
+  </ItemGroup>
 
 </Project>
