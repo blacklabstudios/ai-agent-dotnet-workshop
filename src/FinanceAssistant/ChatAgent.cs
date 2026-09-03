@@ -28,7 +28,11 @@ public class ChatAgent
         _store.AppendSystemMessage(systemPrompt);
     }
 
-    public async Task<string> RunTurnAsync(string input, CancellationToken ct = default)
+    // One model call against the conversation as this agent assembles it, stopping before any
+    // tool runs. That first response already carries the behaviour worth grading cheaply: what
+    // the agent decided to say and do. RunTurnAsync starts with this exact call, so an eval
+    // that stops here and the REPL that carries on cannot disagree about how a turn was built.
+    public async Task<ChatResponse> ProposeNextStepAsync(string input, CancellationToken ct = default)
     {
         _store.AppendUserMessage(input);
 
@@ -37,10 +41,15 @@ public class ChatAgent
             await _reducer.TryReduceAsync(_store, ct);
         }
 
+        return await _chatClient.GetResponseAsync(_store.Messages, _options, ct);
+    }
+
+    public async Task<string> RunTurnAsync(string input, CancellationToken ct = default)
+    {
+        var response = await ProposeNextStepAsync(input, ct);
+
         for (var iteration = 1; iteration <= _maxIterations; iteration++)
         {
-            var response = await _chatClient.GetResponseAsync(_store.Messages, _options, ct);
-
             // The response carries the assistant's reply (which may include tool-call requests).
             // Append it to history so the tool-result messages we add below pair correctly with
             // the model's call requests on the next GetResponseAsync.
@@ -102,6 +111,14 @@ public class ChatAgent
                 }
 
                 _store.AppendToolResult(resultContent);
+            }
+
+            // Ask again, now that the tool results are in history. The cap counts model calls,
+            // and the first one was made by ProposeNextStepAsync above, so the last iteration
+            // does not make a call it would only throw away.
+            if (iteration < _maxIterations)
+            {
+                response = await _chatClient.GetResponseAsync(_store.Messages, _options, ct);
             }
         }
 

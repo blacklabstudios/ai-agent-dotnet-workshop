@@ -1,7 +1,6 @@
 using FinanceAssistant;
 using FinanceAssistant.Data;
 using FinanceAssistant.Memory;
-using FinanceAssistant.Tools;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
@@ -48,20 +47,9 @@ await using (var db = new FinanceDbContext())
     }
 }
 
-var convertCurrency = new ConvertCurrencyTool();
-var getTransactions = new GetTransactionsTool();
-var searchTransactions = new SearchTransactionsTool(embedder);
-var transferFunds = new TransferFundsTool();
-
 var chatOptions = new ChatOptions
 {
-    Tools =
-    [
-        AIFunctionFactory.Create(convertCurrency.Convert),
-        AIFunctionFactory.Create(getTransactions.GetTransactions),
-        AIFunctionFactory.Create(searchTransactions.SearchTransactions),
-        new ApprovalRequiredAIFunction(AIFunctionFactory.Create(transferFunds.Transfer))
-    ]
+    Tools = AgentToolset.CreateTools(embedder)
 };
 
 var systemPrompt = await File.ReadAllTextAsync(
