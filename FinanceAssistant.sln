@@ -9,6 +9,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FinanceAssistant.McpServer"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FinanceAssistant", "src\FinanceAssistant\FinanceAssistant.csproj", "{C9E04F12-8DFE-495A-9407-6631F975F3CF}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FinanceAssistant.Evals", "tests\FinanceAssistant.Evals\FinanceAssistant.Evals.csproj", "{596E12D9-5E30-4E66-97DF-7D81610C88A1}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -43,6 +47,18 @@ Global
 		{C9E04F12-8DFE-495A-9407-6631F975F3CF}.Release|x64.Build.0 = Release|Any CPU
 		{C9E04F12-8DFE-495A-9407-6631F975F3CF}.Release|x86.ActiveCfg = Release|Any CPU
 		{C9E04F12-8DFE-495A-9407-6631F975F3CF}.Release|x86.Build.0 = Release|Any CPU
+		{596E12D9-5E30-4E66-97DF-7D81610C88A1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{596E12D9-5E30-4E66-97DF-7D81610C88A1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{596E12D9-5E30-4E66-97DF-7D81610C88A1}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{596E12D9-5E30-4E66-97DF-7D81610C88A1}.Debug|x64.Build.0 = Debug|Any CPU
+		{596E12D9-5E30-4E66-97DF-7D81610C88A1}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{596E12D9-5E30-4E66-97DF-7D81610C88A1}.Debug|x86.Build.0 = Debug|Any CPU
+		{596E12D9-5E30-4E66-97DF-7D81610C88A1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{596E12D9-5E30-4E66-97DF-7D81610C88A1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{596E12D9-5E30-4E66-97DF-7D81610C88A1}.Release|x64.ActiveCfg = Release|Any CPU
+		{596E12D9-5E30-4E66-97DF-7D81610C88A1}.Release|x64.Build.0 = Release|Any CPU
+		{596E12D9-5E30-4E66-97DF-7D81610C88A1}.Release|x86.ActiveCfg = Release|Any CPU
+		{596E12D9-5E30-4E66-97DF-7D81610C88A1}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -50,5 +66,6 @@ Global
 	GlobalSection(NestedProjects) = preSolution
 		{DFFADDC3-CF06-47B7-A749-EC2B24539451} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{C9E04F12-8DFE-495A-9407-6631F975F3CF} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{596E12D9-5E30-4E66-97DF-7D81610C88A1} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 EndGlobal
