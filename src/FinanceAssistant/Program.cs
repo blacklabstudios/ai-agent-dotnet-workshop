@@ -1,7 +1,6 @@
 using FinanceAssistant;
 using FinanceAssistant.Data;
-using FinanceAssistant.Tools;
-using Microsoft.Agents.AI;
+using Microsoft.Agents.AI.Workflows;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
@@ -48,32 +47,11 @@ await using (var db = new FinanceDbContext())
     }
 }
 
-var systemPrompt = await File.ReadAllTextAsync(
-    Path.Combine(AppContext.BaseDirectory, "Prompts", "SystemPrompt.md"));
+var workflow = FinanceAgents.CreateWorkflow(chatClient, embedder);
 
-// AgentToolset.CreateTools wraps TransferFundsTool in ApprovalRequiredAIFunction.
-// We build the list here without that wrapper, so this demo stays about the loop.
-var convertCurrency = new ConvertCurrencyTool();
-var getTransactions = new GetTransactionsTool();
-var searchTransactions = new SearchTransactionsTool(embedder);
-var transferFunds = new TransferFundsTool();
+Console.WriteLine("Finance assistant (multi-agent). Type a message, or 'exit' to quit.");
 
-var agent = new ChatClientAgent(
-    chatClient,
-    instructions: systemPrompt,
-    name: "FinanceAssistant",
-    description: "Personal finance assistant",
-    tools:
-    [
-        AIFunctionFactory.Create(convertCurrency.Convert),
-        AIFunctionFactory.Create(getTransactions.GetTransactions),
-        AIFunctionFactory.Create(searchTransactions.SearchTransactions),
-        AIFunctionFactory.Create(transferFunds.Transfer)
-    ]);
-
-var session = await agent.CreateSessionAsync();
-
-Console.WriteLine("Finance assistant. Type a message, or 'exit' to quit.");
+List<ChatMessage> messages = new();
 
 while (true)
 {
@@ -84,8 +62,44 @@ while (true)
         break;
     }
 
-    var result = await agent.RunAsync(input, session);
-    Console.WriteLine(result.Text);
+    messages.Add(new ChatMessage(ChatRole.User, input));
+
+    await using StreamingRun run = await InProcessExecution.RunStreamingAsync(workflow, messages);
+    await run.TrySendMessageAsync(new TurnToken(emitEvents: true));
+
+    string? lastExecutorId = null;
+    List<ChatMessage> newMessages = new();
+
+    await foreach (WorkflowEvent evt in run.WatchStreamAsync())
+    {
+        if (evt is AgentResponseUpdateEvent e)
+        {
+            if (e.ExecutorId != lastExecutorId)
+            {
+                lastExecutorId = e.ExecutorId;
+                // ExecutorId looks like "money_coach_d08e4110e9c848eaa0823762ca570c17":
+                // the agent name plus an underscore plus a 32-char instance id.
+                // Strip the trailing _hex32 for display so the labels stay readable.
+                var suffix = e.ExecutorId.LastIndexOf('_');
+                var label = suffix > 0 ? e.ExecutorId[..suffix] : e.ExecutorId;
+                Console.WriteLine();
+                Console.WriteLine($"[{label}]");
+            }
+
+            Console.Write(e.Update.Text);
+        }
+        else if (evt is WorkflowOutputEvent outputEvt)
+        {
+            newMessages = outputEvt.As<List<ChatMessage>>()!;
+            break;
+        }
+    }
+
+    Console.WriteLine();
+
+    // newMessages is the FULL workflow conversation after this turn, not the delta.
+    // Skip the messages we already know about and append only what the workflow added.
+    messages.AddRange(newMessages.Skip(messages.Count));
 }
 
 return 0;

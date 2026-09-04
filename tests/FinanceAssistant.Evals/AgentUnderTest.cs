@@ -1,55 +1,55 @@
-using FinanceAssistant.Memory;
+using Microsoft.Agents.AI.Workflows;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace FinanceAssistant.Evals;
 
-// One turn of the real agent, captured for grading.
+// One turn of the real workflow, captured for grading.
 internal sealed record AgentTurn(
     IReadOnlyList<ChatMessage> Messages,
-    ChatResponse Response,
-    IList<AITool> Tools)
+    ChatResponse Response)
 {
     public IReadOnlyList<FunctionCallContent> ToolCalls { get; } =
         Response.Messages.SelectMany(m => m.Contents).OfType<FunctionCallContent>().ToList();
 
     public string ToolCallSummary =>
         ToolCalls.Count == 0 ? "no tool call" : string.Join(", ", ToolCalls.Select(c => c.Name));
+
+    // One agent's share of the turn: its text, its tool calls and their results. MAF
+    // stamps each message with the name of the agent that wrote it.
+    public ChatResponse From(string agentName) =>
+        new(Response.Messages.Where(m => m.AuthorName == agentName).ToList());
 }
 
-// A real ChatAgent, asked for one turn and stopped at the ProposeNextStepAsync seam. The
-// behaviour we grade is already decided there and no tool is ever invoked, so no Postgres,
-// no embeddings call, no money moved.
+// The real Coach-and-Analyst workflow, run for one whole turn. MAF owns the loop now, so
+// there is no ProposeNextStepAsync to stop at. We grade what the user would read, after
+// every handoff and every tool call. That costs two things the Pillar 5 harness never
+// paid: Postgres has to be up and embedded (run the REPL once first), and a turn is
+// several model calls, not one.
 internal static class AgentUnderTest
 {
     private static readonly Lazy<Harness> Instance = new(Build);
-
-    // The agent's real tool set, with no model call. For an eval that grades a recorded
-    // response and still wants the judge to see every tool the agent ships.
-    public static IList<AITool> Tools => Instance.Value.Options.Tools!;
 
     public static async Task<AgentTurn> RespondToAsync(
         string userMessage, CancellationToken ct = default)
     {
         var harness = Instance.Value;
 
-        // A fresh store and agent per call, so one eval's conversation never leaks into
+        // A fresh workflow per call, so one eval's conversation never leaks into
         // another's and a green run cannot depend on the order the runner picked.
-        var store = new ConversationStore();
+        var workflow = FinanceAgents.CreateWorkflow(harness.Client, harness.Embedder);
 
-        var agent = new ChatAgent(
-            harness.Client,
-            harness.Options,
-            store,
-            harness.SystemPrompt,
-            new SummarizingHistoryReducer(harness.Client));
+        List<ChatMessage> messages = [new(ChatRole.User, userMessage)];
 
-        var response = await agent.ProposeNextStepAsync(userMessage, ct);
+        // Hosted through the workflow's own agent surface rather than the event loop
+        // Program.cs drives by hand for live printing. Same agents, same handoffs, and one
+        // call that returns only what this turn added: both agents' text, the handoffs,
+        // and the tool calls.
+        var result = await workflow.AsAIAgent().RunAsync(messages, cancellationToken: ct);
 
-        // store.Messages is the conversation the agent actually built and sent, not a
-        // reconstruction of it.
-        return new AgentTurn(store.Messages.ToList(), response, harness.Options.Tools!);
+        var response = new ChatResponse(result.Messages.ToList());
+
+        return new AgentTurn(messages, response);
     }
 
     private static Harness Build()
@@ -67,15 +67,10 @@ internal static class AgentUnderTest
         var embedder =
             provider.GetRequiredService<IEmbeddingGenerator<string, Embedding<float>>>();
 
-        var options = new ChatOptions { Tools = AgentToolset.CreateTools(embedder) };
-
-        // The agent project's Prompts/SystemPrompt.md is copied into this project's
-        // output by the project reference, so the eval reads the file the agent ships.
-        var systemPrompt = File.ReadAllText(
-            Path.Combine(AppContext.BaseDirectory, "Prompts", "SystemPrompt.md"));
-
-        return new Harness(client, options, systemPrompt);
+        return new Harness(client, embedder);
     }
 
-    private sealed record Harness(IChatClient Client, ChatOptions Options, string SystemPrompt);
+    private sealed record Harness(
+        IChatClient Client,
+        IEmbeddingGenerator<string, Embedding<float>> Embedder);
 }
