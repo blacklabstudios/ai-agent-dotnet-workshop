@@ -40,7 +40,8 @@ A personal finance assistant agent built with .NET 10. Throughout the workshop, 
 
 - [`src/FinanceAssistant/`](src/FinanceAssistant): the agent. A single .NET 10 console app holding the domain (Models, Data, Services), the REPL (Program.cs), and the system prompt (`Prompts/SystemPrompt.md`). Evolves in place across all six pillars.
 - [`src/FinanceAssistant.McpServer/`](src/FinanceAssistant.McpServer): empty ASP.NET Core minimal-API placeholder. Filled in during Pillar 6.
-- `FinanceAssistant.sln`: solution file. Open this in Visual Studio, Rider, or VS Code.
+- `tests/FinanceAssistant.Evals/`: the eval project. It doesn't exist when you clone: you create it in P5.02. It's deliberately outside `FinanceAssistant.sln`, so a green solution build says nothing about it. Build it on its own with `dotnet build tests/FinanceAssistant.Evals`.
+- `FinanceAssistant.sln`: solution file. Open this in Visual Studio, Rider, or VS Code. Holds the two `src/` projects only.
 - `global.json`: pins the .NET SDK to `10.0.400`.
 - `scaffolding/transactions.csv`: bank-statement-style seed (400 rows) imported on first run.
 - `docker-compose.yml`: local `pgvector/pgvector:pg18` container. Used by the agent for transactions storage and (from P2.02) embeddings.
@@ -70,4 +71,3 @@ If you get stuck, fast-forward to the canonical state:
 git stash                  # set your in-progress work aside
 git checkout p2-02-end     # jump to the end of, e.g., exercise P2.02
 ```
-

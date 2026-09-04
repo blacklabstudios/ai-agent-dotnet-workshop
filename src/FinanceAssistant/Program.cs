@@ -2,6 +2,7 @@ using FinanceAssistant;
 using FinanceAssistant.Data;
 using FinanceAssistant.Tools;
 using Microsoft.Agents.AI;
+using Microsoft.Agents.AI.Workflows;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
@@ -48,32 +49,43 @@ await using (var db = new FinanceDbContext())
     }
 }
 
-var systemPrompt = await File.ReadAllTextAsync(
-    Path.Combine(AppContext.BaseDirectory, "Prompts", "SystemPrompt.md"));
+var analystPrompt = await File.ReadAllTextAsync(
+    Path.Combine(AppContext.BaseDirectory, "Prompts", "AnalystPrompt.md"));
+var coachPrompt = await File.ReadAllTextAsync(
+    Path.Combine(AppContext.BaseDirectory, "Prompts", "CoachPrompt.md"));
 
-// AgentToolset.CreateTools wraps TransferFundsTool in ApprovalRequiredAIFunction.
-// We build the list here without that wrapper, so this demo stays about the loop.
 var convertCurrency = new ConvertCurrencyTool();
 var getTransactions = new GetTransactionsTool();
 var searchTransactions = new SearchTransactionsTool(embedder);
-var transferFunds = new TransferFundsTool();
 
-var agent = new ChatClientAgent(
+var analyst = new ChatClientAgent(
     chatClient,
-    instructions: systemPrompt,
-    name: "FinanceAssistant",
-    description: "Personal finance assistant",
+    instructions: analystPrompt,
+    name: "data_analyst",
+    description: "Specialist in transaction data and currency conversion",
     tools:
     [
         AIFunctionFactory.Create(convertCurrency.Convert),
         AIFunctionFactory.Create(getTransactions.GetTransactions),
-        AIFunctionFactory.Create(searchTransactions.SearchTransactions),
-        AIFunctionFactory.Create(transferFunds.Transfer)
+        AIFunctionFactory.Create(searchTransactions.SearchTransactions)
     ]);
 
-var session = await agent.CreateSessionAsync();
+var coach = new ChatClientAgent(
+    chatClient,
+    instructions: coachPrompt,
+    name: "money_coach",
+    description: "Financial coach who interprets findings and recommends next steps",
+    tools: []);
 
-Console.WriteLine("Finance assistant. Type a message, or 'exit' to quit.");
+var workflow = AgentWorkflowBuilder
+    .CreateHandoffBuilderWith(coach)
+    .WithHandoffs(coach, [analyst])
+    .WithHandoffs(analyst, [coach])
+    .Build();
+
+Console.WriteLine("Finance assistant (multi-agent). Type a message, or 'exit' to quit.");
+
+List<ChatMessage> messages = new();
 
 while (true)
 {
@@ -84,8 +96,44 @@ while (true)
         break;
     }
 
-    var result = await agent.RunAsync(input, session);
-    Console.WriteLine(result.Text);
+    messages.Add(new ChatMessage(ChatRole.User, input));
+
+    await using StreamingRun run = await InProcessExecution.RunStreamingAsync(workflow, messages);
+    await run.TrySendMessageAsync(new TurnToken(emitEvents: true));
+
+    string? lastExecutorId = null;
+    List<ChatMessage> newMessages = new();
+
+    await foreach (WorkflowEvent evt in run.WatchStreamAsync())
+    {
+        if (evt is AgentResponseUpdateEvent e)
+        {
+            if (e.ExecutorId != lastExecutorId)
+            {
+                lastExecutorId = e.ExecutorId;
+                // ExecutorId looks like "money_coach_d08e4110e9c848eaa0823762ca570c17":
+                // the agent name plus an underscore plus a 32-char instance id.
+                // Strip the trailing _hex32 for display so the labels stay readable.
+                var suffix = e.ExecutorId.LastIndexOf('_');
+                var label = suffix > 0 ? e.ExecutorId[..suffix] : e.ExecutorId;
+                Console.WriteLine();
+                Console.WriteLine($"[{label}]");
+            }
+
+            Console.Write(e.Update.Text);
+        }
+        else if (evt is WorkflowOutputEvent outputEvt)
+        {
+            newMessages = outputEvt.As<List<ChatMessage>>()!;
+            break;
+        }
+    }
+
+    Console.WriteLine();
+
+    // newMessages is the FULL workflow conversation after this turn, not the delta.
+    // Skip the messages we already know about and append only what the workflow added.
+    messages.AddRange(newMessages.Skip(messages.Count));
 }
 
 return 0;
