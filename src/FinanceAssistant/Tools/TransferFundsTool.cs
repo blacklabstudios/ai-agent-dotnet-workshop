@@ -4,7 +4,7 @@ namespace FinanceAssistant.Tools;
 
 public class TransferFundsTool
 {
-    [Description("Transfer money between user accounts. This action is irreversible and the user will be asked to confirm before it runs.")]
+    [Description("Transfer money between user accounts. This action is irreversible.")]
     public Task<object> Transfer(
         [Description("Source account name, e.g. 'Checking'")] string fromAccount,
         [Description("Destination account name, e.g. 'Savings'")] string toAccount,
