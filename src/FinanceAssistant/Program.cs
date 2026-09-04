@@ -1,6 +1,7 @@
 using FinanceAssistant;
 using FinanceAssistant.Data;
-using FinanceAssistant.Memory;
+using FinanceAssistant.Tools;
+using Microsoft.Agents.AI;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
@@ -47,17 +48,30 @@ await using (var db = new FinanceDbContext())
     }
 }
 
-var chatOptions = new ChatOptions
-{
-    Tools = AgentToolset.CreateTools(embedder)
-};
-
 var systemPrompt = await File.ReadAllTextAsync(
     Path.Combine(AppContext.BaseDirectory, "Prompts", "SystemPrompt.md"));
 
-var store = new ConversationStore();
-var reducer = new SummarizingHistoryReducer(chatClient);
-var chatAgent = new ChatAgent(chatClient, chatOptions, store, systemPrompt, reducer);
+// AgentToolset.CreateTools wraps TransferFundsTool in ApprovalRequiredAIFunction.
+// We build the list here without that wrapper, so this demo stays about the loop.
+var convertCurrency = new ConvertCurrencyTool();
+var getTransactions = new GetTransactionsTool();
+var searchTransactions = new SearchTransactionsTool(embedder);
+var transferFunds = new TransferFundsTool();
+
+var agent = new ChatClientAgent(
+    chatClient,
+    instructions: systemPrompt,
+    name: "FinanceAssistant",
+    description: "Personal finance assistant",
+    tools:
+    [
+        AIFunctionFactory.Create(convertCurrency.Convert),
+        AIFunctionFactory.Create(getTransactions.GetTransactions),
+        AIFunctionFactory.Create(searchTransactions.SearchTransactions),
+        AIFunctionFactory.Create(transferFunds.Transfer)
+    ]);
+
+var session = await agent.CreateSessionAsync();
 
 Console.WriteLine("Finance assistant. Type a message, or 'exit' to quit.");
 
@@ -70,10 +84,8 @@ while (true)
         break;
     }
 
-    Console.WriteLine($"[memory] {store.Messages.Count} messages in history");
-
-    var reply = await chatAgent.RunTurnAsync(input);
-    Console.WriteLine(reply);
+    var result = await agent.RunAsync(input, session);
+    Console.WriteLine(result.Text);
 }
 
 return 0;

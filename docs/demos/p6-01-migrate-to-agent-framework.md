@@ -336,7 +336,7 @@ Add `using FinanceAssistant.Tools;`. The tool classes live in that namespace, an
 
 ### `agent.RunAsync` returns the same answer every time, or context is lost between turns
 
-You're probably constructing a new session on every loop iteration. The session is what carries history. Construct it once via `await agent.CreateSessionAsync()` before the `while (true)` loop, not inside it. The pattern is one agent, one session for the conversation.
+You are probably constructing a new session on every loop iteration. The session is what carries history. Construct it once via `await agent.CreateSessionAsync()` before the `while (true)` loop, not inside it. The pattern is one agent, one session for the conversation.
 
 ### Tools fire but the agent never produces a final answer
 
