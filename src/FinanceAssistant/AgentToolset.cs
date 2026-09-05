@@ -14,12 +14,14 @@ public static class AgentToolset
         var getTransactions = new GetTransactionsTool();
         var searchTransactions = new SearchTransactionsTool(embedder);
         var transferFunds = new TransferFundsTool();
+        var importStatement = new ImportStatementTool();
 
         return
         [
             AIFunctionFactory.Create(convertCurrency.Convert),
             AIFunctionFactory.Create(getTransactions.GetTransactions),
             AIFunctionFactory.Create(searchTransactions.SearchTransactions),
+            AIFunctionFactory.Create(importStatement.ImportStatement),
             new ApprovalRequiredAIFunction(AIFunctionFactory.Create(transferFunds.Transfer))
         ];
     }
