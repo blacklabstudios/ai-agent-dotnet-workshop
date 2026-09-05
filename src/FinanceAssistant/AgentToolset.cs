@@ -15,6 +15,7 @@ public static class AgentToolset
         var searchTransactions = new SearchTransactionsTool(embedder);
         var transferFunds = new TransferFundsTool();
         var importStatement = new ImportStatementTool();
+        var analyzeExpenses = new AnalyzeExpensesTool();
 
         return
         [
@@ -22,6 +23,7 @@ public static class AgentToolset
             AIFunctionFactory.Create(getTransactions.GetTransactions),
             AIFunctionFactory.Create(searchTransactions.SearchTransactions),
             AIFunctionFactory.Create(importStatement.ImportStatement),
+            AIFunctionFactory.Create(analyzeExpenses.AnalyzeExpenses),
             new ApprovalRequiredAIFunction(AIFunctionFactory.Create(transferFunds.Transfer))
         ];
     }
