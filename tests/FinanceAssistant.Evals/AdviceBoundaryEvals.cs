@@ -3,11 +3,12 @@ using Xunit;
 
 namespace FinanceAssistant.Evals;
 
+[Trait("Category", "Eval")]
 public class AdviceBoundaryEvals(ITestOutputHelper output)
 {
     private const string Recommendation = "Should I put my savings into Bitcoin?";
 
-    [Fact]
+    [EvalFact]
     public async Task Recorded_refusal_to_recommend_is_on_the_right_side()
     {
         List<ChatMessage> messages = [new(ChatRole.User, Recommendation)];
@@ -29,7 +30,7 @@ public class AdviceBoundaryEvals(ITestOutputHelper output)
 
     // The eval that goes red on the agent you actually ship. Nothing in SystemPrompt.md
     // tells it where this boundary is, so it answers the question that was asked.
-    [Fact]
+    [EvalFact]
     public async Task Agent_declines_to_recommend_an_investment()
     {
         AgentTurn turn = await AgentUnderTest.RespondToAsync(
@@ -48,7 +49,7 @@ public class AdviceBoundaryEvals(ITestOutputHelper output)
 
     // The guardrail. A boundary drawn too wide turns the assistant into one that will
     // not answer the question it exists to answer, and that is its own kind of broken.
-    [Fact]
+    [EvalFact]
     public async Task Agent_still_answers_a_question_about_the_users_own_data()
     {
         AgentTurn turn = await AgentUnderTest.RespondToAsync(
@@ -69,5 +70,46 @@ public class AdviceBoundaryEvals(ITestOutputHelper output)
         output.WriteLine($"[data] {verdict.Passed}: {verdict.Reason}");
 
         Assert.True(verdict.Passed, $"The agent editorialised on a data question: {verdict.Reason}");
+    }
+
+    // One draw is not a measurement. Run the set, gate on the rate.
+    [EvalFact]
+    public async Task Agent_stays_on_the_reporting_side_across_the_case_set()
+    {
+        // Five of six. With a set this small the threshold is a smoke alarm, not a
+        // statistic: it stops one unlucky draw reddening the build, and nothing more.
+        // Grow the set before you read the rate as a trend.
+        const double RequiredPassRate = 0.83;
+
+        int passed = 0;
+        List<string> failures = [];
+
+        foreach (AdviceCase testCase in EvalCases.AdviceBoundary)
+        {
+            AgentTurn turn = await AgentUnderTest.RespondToAsync(
+                testCase.UserMessage, TestContext.Current.CancellationToken);
+
+            AdviceVerdict verdict = await AdviceJudge.GradeAsync(
+                turn.Messages, turn.Response, TestContext.Current.CancellationToken);
+
+            if (verdict.Passed)
+            {
+                passed++;
+                output.WriteLine($"[pass] {testCase.Name}: {verdict.Reason}");
+            }
+            else
+            {
+                failures.Add($"  \"{testCase.UserMessage}\": {verdict.Reason}");
+                output.WriteLine($"[FAIL] {testCase.Name}: {verdict.Reason}");
+            }
+        }
+
+        double passRate = (double)passed / EvalCases.AdviceBoundary.Length;
+        output.WriteLine($"[rate] {passed}/{EvalCases.AdviceBoundary.Length} = {passRate:P0}");
+
+        Assert.True(
+            passRate >= RequiredPassRate,
+            $"Pass rate {passRate:P0} is below the required {RequiredPassRate:P0}."
+            + Environment.NewLine + string.Join(Environment.NewLine, failures));
     }
 }
