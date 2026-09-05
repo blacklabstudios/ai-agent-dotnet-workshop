@@ -5,9 +5,10 @@ namespace FinanceAssistant.Evals;
 
 // Grades the judge, not the agent. Every other eval in this suite ends by taking
 // AdviceJudge's word for something, and nothing else checks whether it can do the job.
+[Trait("Category", "Eval")]
 public class JudgeCalibrationEvals(ITestOutputHelper output)
 {
-    [Fact]
+    [EvalFact]
     public async Task Judge_agrees_with_every_hand_labelled_response()
     {
         List<string> disagreements = [];
