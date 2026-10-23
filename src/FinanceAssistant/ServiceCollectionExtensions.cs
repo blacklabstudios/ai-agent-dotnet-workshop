@@ -34,6 +34,10 @@ public static class ServiceCollectionExtensions
                 .AsBuilder()
                 .ConfigureOptions(o =>
                     o.Reasoning = new ReasoningOptions { Effort = reasoningEffort })
+                // After ConfigureOptions, so the span records the request as it goes on the wire.
+                .UseOpenTelemetry()
+                // Inside the telemetry layer, so the cost lands on the chat span too.
+                .UseCostTracking()
                 .Build());
     }
 
@@ -53,6 +57,10 @@ public static class ServiceCollectionExtensions
                     new ApiKeyCredential(apiKey),
                     new OpenAIClientOptions { Endpoint = apiBase })
                 .GetEmbeddingClient(embeddingDeployment)
-                .AsIEmbeddingGenerator());
+                .AsIEmbeddingGenerator()
+                .AsBuilder()
+                .UseOpenTelemetry()
+                .UseCostTracking()
+                .Build());
     }
 }
