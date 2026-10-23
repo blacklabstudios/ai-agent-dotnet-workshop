@@ -6,8 +6,35 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using OpenTelemetry;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 using Pgvector;
 
+// M.E.AI's default name for the spans and metrics that UseOpenTelemetry() emits.
+// "Experimental" because the GenAI semantic conventions are still in development.
+const string MeaiTelemetrySourceName = "Experimental.Microsoft.Extensions.AI";
+
+var resource = ResourceBuilder.CreateDefault().AddService("finance-assistant");
+
+// Both exporters default to OTLP over gRPC on localhost:4317.
+// Point them elsewhere with OTEL_EXPORTER_OTLP_ENDPOINT, no code change.
+using var tracerProvider = Sdk.CreateTracerProviderBuilder()
+    .SetResourceBuilder(resource)
+    .AddSource(MeaiTelemetrySourceName)
+    .AddSource(ChatAgent.TelemetrySourceName)
+    .AddOtlpExporter()
+    .Build();
+
+using var meterProvider = Sdk.CreateMeterProviderBuilder()
+    .SetResourceBuilder(resource)
+    .AddMeter(MeaiTelemetrySourceName)
+    .AddMeter(ChatAgent.TelemetrySourceName)
+    // The default export interval is 60 seconds. Five keeps the dashboard live during a demo.
+    .AddOtlpExporter((_, reader) =>
+        reader.PeriodicExportingMetricReaderOptions.ExportIntervalMilliseconds = 5_000)
+    .Build();
 
 await using (var db = new FinanceDbContext())
 {

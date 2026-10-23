@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using FinanceAssistant.Memory;
 using Microsoft.Extensions.AI;
 
@@ -5,6 +6,12 @@ namespace FinanceAssistant;
 
 public class ChatAgent
 {
+    public const string TelemetrySourceName = "FinanceAssistant";
+
+    // UseOpenTelemetry() traces each model call. The loop is ours, so the spans
+    // that tie those calls into one turn are ours too.
+    private static readonly ActivitySource Telemetry = new(TelemetrySourceName);
+
     private readonly IChatClient _chatClient;
     private readonly ChatOptions _options;
     private readonly ConversationStore _store;
@@ -30,6 +37,11 @@ public class ChatAgent
 
     public async Task<string> RunTurnAsync(string input, CancellationToken ct = default)
     {
+        // One span per turn. Every chat, embeddings and execute_tool span below becomes its child.
+        using var agentActivity = Telemetry.StartActivity("invoke_agent FinanceAssistant");
+        agentActivity?.SetTag("gen_ai.operation.name", "invoke_agent");
+        agentActivity?.SetTag("gen_ai.agent.name", "FinanceAssistant");
+
         _store.AppendUserMessage(input);
 
         if (_reducer is not null)
@@ -88,6 +100,12 @@ public class ChatAgent
                     continue;
                 }
 
+                using var toolActivity = Telemetry.StartActivity($"execute_tool {call.Name}");
+                toolActivity?.SetTag("gen_ai.operation.name", "execute_tool");
+                toolActivity?.SetTag("gen_ai.tool.name", call.Name);
+                toolActivity?.SetTag("gen_ai.tool.call.id", call.CallId);
+                toolActivity?.SetTag("gen_ai.tool.type", "function");
+
                 AIContent resultContent;
                 try
                 {
@@ -96,6 +114,9 @@ public class ChatAgent
                 }
                 catch (Exception ex)
                 {
+                    toolActivity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                    toolActivity?.SetTag("error.type", ex.GetType().FullName);
+
                     // Tool threw something the model didn't handle (or we didn't wrap at the tool boundary).
                     // Hand the model a structured error so it can recover or apologise.
                     resultContent = new FunctionResultContent(call.CallId, $"Tool error: {ex.Message}");
@@ -108,6 +129,7 @@ public class ChatAgent
         // Hit the iteration cap. The model is probably stuck in a tool-call loop.
         // Return whatever the last assistant text was, or a fallback message.
         Console.Error.WriteLine($"[agent] iteration cap of {_maxIterations} hit. The agent looped on tool calls without producing a final answer.");
+        agentActivity?.SetStatus(ActivityStatusCode.Error, "iteration cap reached");
         var lastAssistantText = _store.Messages
             .Where(m => m.Role == ChatRole.Assistant)
             .Select(m => m.Text)
